@@ -9,54 +9,11 @@
 
 Chart::Chart(QWidget *parent) : QChartView(parent)
 {
-    QLineSeries *seriesLine = new QLineSeries();
-
     setRenderHint(QPainter::Antialiasing);
-
-    QPen linePen;
-    linePen.setWidth(2);
-    seriesLine->setPen(linePen);
-
-    QLineSeries *upper = new QLineSeries;
-    QLineSeries *lower = new QLineSeries;
-    QAreaSeries *seriesArea = new QAreaSeries(upper, lower);
-
-    QPen areaPen;
-    areaPen.setWidth(0);
-    seriesArea->setPen(areaPen);
-    seriesArea->setOpacity(0.3);
-
-    int previous = 0;
-    for(int i = 0; i < 60 * 12; i++){
-        seriesLine->append(QDateTime::currentDateTime().addSecs(-i * 60).toMSecsSinceEpoch(),
-                             QRandomGenerator::global()->bounded(0, 101));
-
-        int current = QRandomGenerator::global()->bounded(0, 2);
-
-        if(current == previous){
-            upper->append(QDateTime::currentDateTime().addSecs(-i * 60).toMSecsSinceEpoch(), current);
-        }
-        else if(current == 1){
-            upper->append(QDateTime::currentDateTime().addSecs(-i * 60).toMSecsSinceEpoch(), 0);
-            upper->append(QDateTime::currentDateTime().addSecs(-i * 60).toMSecsSinceEpoch(), 1);
-        }
-        else{
-            upper->append(QDateTime::currentDateTime().addSecs(-i * 60).toMSecsSinceEpoch(), 1);
-            upper->append(QDateTime::currentDateTime().addSecs(-i * 60).toMSecsSinceEpoch(), 0);
-        }
-
-        lower->append(QDateTime::currentDateTime().addSecs(-i * 60).toMSecsSinceEpoch(), 0);
-        previous = current;
-    }
-
-    seriesArea->setColor(Qt::white);
-    seriesLine->setColor(Qt::white);
 
     chart = new QChart();
     chart->setBackgroundBrush(QBrush(QColor(255, 255, 255, 0)));
     chart->legend()->hide();
-    chart->addSeries(seriesLine);
-    chart->addSeries(seriesArea);
     setChart(chart);
 
     axisX = new QDateTimeAxis;
@@ -65,26 +22,13 @@ Chart::Chart(QWidget *parent) : QChartView(parent)
     axisX->setLabelsColor(Qt::white);
     axisX->setFormat("dd.MM hh:mm");
     axisX->setTitleText(" ");
-    axisX->setRange(QDateTime::currentDateTime().addSecs(-60 * 60 * 2), QDateTime::currentDateTime());
     chart->addAxis(axisX, Qt::AlignBottom);
-    seriesArea->attachAxis(axisX);
-    seriesLine->attachAxis(axisX);
-
-    axisAnalogY = new QValueAxis;
-    axisAnalogY->setTickAnchor(10);
-    axisAnalogY->setLabelsColor(Qt::white);
-    axisAnalogY->setGridLineColor(QColor(255, 255, 255, 85));
-    axisAnalogY->setLineVisible(false);
-    axisAnalogY->setLabelFormat("%i");
-    axisAnalogY->setRange(0, 100);
-    chart->addAxis(axisAnalogY, Qt::AlignLeft);
-    seriesLine->attachAxis(axisAnalogY);
 
     axisDiscreteY = new QValueAxis;
     axisDiscreteY->hide();
     axisDiscreteY->setRange(0, 1);
+    axisDiscreteY->setTickCount(2);
     chart->addAxis(axisDiscreteY, Qt::AlignLeft);
-    seriesArea->attachAxis(axisDiscreteY);
 
     QVBoxLayout *layout = new QVBoxLayout;
     setLayout(layout);
@@ -143,6 +87,104 @@ Chart::Chart(QWidget *parent) : QChartView(parent)
     currentRange = defaultVisibleRangeHrs;
     setScrollBarRange();
     setRangeAxisX();
+}
+
+void Chart::attachSeries(QAbstractSeries *series, int sensorType)
+{
+    listSeries.append(series);
+    series->attachAxis(axisX);
+    series->hide();
+
+    if(listAxisY.contains(sensorType)){
+        QValueAxis *axis = listAxisY.value(sensorType);
+        series->attachAxis(axis);
+    }
+    else{
+        axisAnalogY = new QValueAxis;
+        axisAnalogY->hide();
+        axisAnalogY->setTickCount(5);
+        axisAnalogY->setLabelsColor(Qt::white);
+        axisAnalogY->setGridLineColor(QColor(255, 255, 255, 85));
+        axisAnalogY->setLineVisible(false);
+        axisAnalogY->setLabelFormat("%i");
+        axisAnalogY->setRange(0, 100); //TODO в заисимости от типа сенсора, задается соответствующий ренж
+
+        listAxisY.insert(sensorType, axisAnalogY);
+
+        chart->addAxis(axisAnalogY, Qt::AlignLeft);
+        series->attachAxis(axisAnalogY);
+    }
+
+    chart->addSeries(series);
+}
+
+void Chart::seriesClicked(QAbstractSeries *series)
+{
+    QLineSeries *line = qobject_cast<QLineSeries*>(series);
+    if(line != nullptr){
+        if(selectedSeries != nullptr){
+            if(isMultyChart){
+                selectedSeries->setOpacity(0.5);
+            }
+            else{
+                selectedSeries->hide();
+            }
+        }
+        line->show();
+        line->setOpacity(1);
+        selectedSeries = line;
+
+        if(isMultyChart)
+            selectedSeriresList.append(line);
+
+        QList<QAbstractAxis *> axes = line->attachedAxes();
+        for(auto a : axes){
+            QValueAxis *value = qobject_cast<QValueAxis*>(a);
+            if(value != nullptr){
+                if(selectedAxis != nullptr)
+                    selectedAxis->hide();
+
+                value->show();
+                selectedAxis = value;
+            }
+        }
+    }
+
+    QAreaSeries *area = qobject_cast<QAreaSeries*>(series);
+    if(area != nullptr){
+        if(selectedSeries != nullptr){
+            if(isMultyChart){
+                selectedSeries->setOpacity(0.15);
+            }
+            else{
+                selectedSeries->hide();
+            }
+        }
+        area->show();
+        area->setOpacity(0.3);
+        selectedSeries = area;
+
+        if(isMultyChart)
+            selectedSeriresList.append(area);
+
+        if(selectedAxis != nullptr)
+            selectedAxis->hide();
+
+        axisDiscreteY->show();
+        selectedAxis = axisDiscreteY;
+    }
+}
+
+void Chart::modeChanged(bool multyChartMode)
+{
+    isMultyChart = multyChartMode;
+
+    if(!multyChartMode && !selectedSeriresList.isEmpty()){
+        for(auto s : selectedSeriresList){
+            if(s != selectedSeries)
+                s->hide();
+        }
+    }
 }
 
 void Chart::wheelEvent(QWheelEvent *event)

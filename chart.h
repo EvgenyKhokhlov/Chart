@@ -3,7 +3,7 @@
 
 #include <QWidget>
 #include <QChartView>
-#include <QSplineSeries>
+#include <QLineSeries>
 #include <QDateTimeAxis>
 #include <QValueAxis>
 #include <QAreaSeries>
@@ -14,12 +14,21 @@ class Chart : public QChartView
 public:
     explicit Chart(QWidget *parent = nullptr);
 
+    void attachSeries(QAbstractSeries *series, int sensorType);
+
 private:
     QChart *chart;
     QScrollBar *scrollBar;
     QDateTimeAxis *axisX;
+    QMultiMap<int, QValueAxis*> listAxisY;
+    QVector<QAbstractSeries*> listSeries;
+
     QValueAxis *axisAnalogY;
     QValueAxis *axisDiscreteY;
+
+    QAbstractSeries *selectedSeries = nullptr;
+    QValueAxis *selectedAxis = nullptr;
+    QVector<QAbstractSeries*> selectedSeriresList;
 
     void wheelEvent(QWheelEvent *event);
     void mouseMoveEvent(QMouseEvent* event);
@@ -30,6 +39,7 @@ private:
     int mouseOffset;
     double scrollValue = 0;
     double currentRange;
+    bool isMultyChart = false;
 
     const int defaultVisibleRangeHrs = 1;
     const int scrollValueStepSecs = 60;
@@ -41,6 +51,10 @@ private slots:
     void scrollValueChange(int value);
     void plusButtonClicked();
     void minusButtonClicked();
+
+public slots:
+    void seriesClicked(QAbstractSeries *series);
+    void modeChanged(bool multyChartMode);
 
 };
 
